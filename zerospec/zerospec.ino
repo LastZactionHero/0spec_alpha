@@ -126,7 +126,7 @@ void setup() {
   clearDisplay(WHITE);
   updateDisplay();
 
-  strncpy(messageBuffer, "Hello World! This goes on to multiple lines.", MESSAGE_BUFFER_LEN);
+  strncpy(messageBuffer, "Hello World!\nThis string goes on to take multiple lines.", MESSAGE_BUFFER_LEN);
   writeMessageBuffer();
 }
 
@@ -146,6 +146,9 @@ void writeMessageBuffer(){
 
     if(messageBuffer[i] == 0){
       break;
+    } else if(messageBuffer[i] == '\n') {
+      gTextStartY += 8;
+      gTextStartX = 0;
     } else if(messageBuffer[i] == ' '){
       gTextStartX += 6;
     } else {
@@ -157,12 +160,11 @@ void writeMessageBuffer(){
 }
 
 int writeCharacter(char character){
-  int charWidth = 0;
+  int charWidth = calcCharWidth(character);
   bool charPixels[8 * 8];
   int bitPosn = 0;
 
-  int fontIdx = character - 0x21; 
-
+  int fontIdx = charToFontIdx(character);
   char fontBuffer[16];
   strcpy_P(fontBuffer, (char*)pgm_read_word(&(font_table[fontIdx])));   
    
@@ -170,12 +172,7 @@ int writeCharacter(char character){
     char byteBuff[2];
 
     // Determine the width of the letter
-    if(charIdx == 0){
-    
-      char w[1];
-      w[0] = fontBuffer[charIdx];
-      charWidth = atoi(w); 
-    } else if(charIdx >= 2){
+    if(charIdx >= 2){
       byteBuff[charIdx % 2] = fontBuffer[charIdx];
       if(charIdx % 2 == 1){
         unsigned long hex = strtoul(byteBuff, NULL, 16);
@@ -201,6 +198,16 @@ int writeCharacter(char character){
   return charWidth;
 }
 
+int charToFontIdx(char character) {
+  return character - 0x21;
+}
+
+int calcCharWidth(char character) {
+  int fontIdx = charToFontIdx(character);
+  char w[1];
+  strncpy_P(w, (char*)pgm_read_word(&(font_table[fontIdx])), 1);  
+  return atoi(w);
+}
 
 
 void loop() {
