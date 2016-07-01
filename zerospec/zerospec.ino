@@ -129,8 +129,25 @@ const int TEXT_MAX_CHAR_WIDTH = 8;
 const int TEXT_SPACE_WIDTH = 6;
 const int TEXT_LETTER_SPACE_WIDTH = 2;
 
+// Operaton Modes
+const char MODE_CLOCK = 0;
+const char MODE_INCOMING_NOTIFICATION = 1;
+const char MODE_PAST_NOTIFICATIONS = 2;
+char mode = MODE_CLOCK;
+
+// Incoming Notification
+int notificationCountdown = 0;
+const int NOTIFICATION_TIME = 5;
+
+// Clock
+int hour   = 0;
+int minute = 0;
+int second = 0;
+
 // Display buffer
 byte displayMap[LCD_WIDTH * LCD_HEIGHT / 8];  
+
+
 
 void setup() {
   Serial.begin(9600);
@@ -147,19 +164,160 @@ void setup() {
 }
 
 
+void loop() {
+  delay(1000);  
+  incrementClock();
+  readSerial();
+
+  switch(mode){
+    case MODE_CLOCK:
+      writeClock();
+      break;
+    case MODE_INCOMING_NOTIFICATION:
+      notificationCountdown--;
+      if(notificationCountdown == 0){
+        mode = MODE_CLOCK;
+      }
+      break;
+    case MODE_PAST_NOTIFICATIONS:
+      break;
+     default:
+      break;
+  }
+}
+
+/* RECEIVE */
+bool isReceiving = false;
+char receiveMode = 0;
+
+void readSerial() {
+  while (Serial.available() > 0) {
+    char incomingChar = Serial.read();
+
+    // Receive mode has been identified. Collect and process the payload.
+    if(isReceiving){
+      switch(receiveMode){
+        case 'N':
+          readNotification(incomingChar);
+          break;
+        case 'C':
+          readClock(incomingChar);
+          break;
+      }
+
+    // Receive just started. Identify the receive mode.
+    } else if(incomingChar == 'N' || incomingChar == 'C') {
+      receiveMode = incomingChar;
+      isReceiving = true;
+    }
+
+  }  
+}
+
+/* RECEIVE: UPDATING THE CLOCK */
+char clockBuffer[6];    // Clock updates come in as: HHMMSS
+int clockBufferIdx = 0; // Current read char in the buffer
+
+// Read incoming clock characters
+// Trigger clock update if finished
+void readClock(char incomingChar) {
+  clockBuffer[clockBufferIdx] = incomingChar;
+
+  if(clockBufferIdx == 5) {
+    // Read is finished
+    updateClock();
+    clockBufferIdx = 0;
+    isReceiving = false;
+  } else {
+    // Continue reading
+    clockBufferIdx++;
+  }
+}
+
+// Update the clock with the contents of the clockBuffer
+// Buffer: HHMMSS (e.g. 185530 => 18:55:30)
+void updateClock(){
+  hour =   (clockBuffer[0] - 0x30) * 10 + clockBuffer[1] - 0x30;
+  minute = (clockBuffer[2] - 0x30) * 10 + clockBuffer[3] - 0x30;
+  second = (clockBuffer[4] - 0x30) * 10 + clockBuffer[5] - 0x30;
+}
+
+/* RECEIVE: INCOMING NOTIFICATION */
 int msgBufferIdx = 0;
 
-void loop() {  
-  if (Serial.available() > 0) {
-    char incomingChar = Serial.read();
-    if(incomingChar == '\n'){
-      msgBufferIdx = 0;
-      writeMessageBuffer();
-    } else if(msgBufferIdx < (MESSAGE_BUFFER_LEN + 1)) {
-      messageBuffer[msgBufferIdx] = incomingChar;
-      messageBuffer[msgBufferIdx + 1] = 0;
-      msgBufferIdx++;
-    }
+// Read incoming notification characters
+// Show notification text when finished
+void readNotification(char incomingChar){
+  if(incomingChar == '\n'){
+    // End of message
+    isReceiving = false;
+    msgBufferIdx = 0;
+
+    // Show the notification
+    notificationCountdown = NOTIFICATION_TIME;
+    mode = MODE_INCOMING_NOTIFICATION;
+    writeMessageBuffer();
+
+  } else if(msgBufferIdx < (MESSAGE_BUFFER_LEN + 1)) {
+    // Continue reading notification
+    messageBuffer[msgBufferIdx] = incomingChar;
+    messageBuffer[msgBufferIdx + 1] = 0;
+    msgBufferIdx++;
+  }
+}
+
+/* CLOCK */
+
+// Write clock time to the display
+void writeClock() {
+  char clockBuffer[12];
+
+  int hour12 = hour;
+  bool isPM = false;
+
+  if(hour12 == 12){
+    isPM = true;
+  } else if(hour12 > 12){
+    isPM = true;
+    hour12 = hour12 - 12;
+  } else if(hour12 == 0){
+    hour12 = 12;
+  }
+
+  clockBuffer[0] = (hour12 / 10) + 0x30;
+  clockBuffer[1] = (hour12 % 10) + 0x30;
+  clockBuffer[2] = ':';
+  clockBuffer[3] = (minute / 10) + 0x30;
+  clockBuffer[4] = (minute % 10) + 0x30;
+  clockBuffer[5] = ':';
+  clockBuffer[6] = (second / 10) + 0x30;
+  clockBuffer[7] = (second % 10) + 0x30; 
+  clockBuffer[8] = ' ';
+  if(isPM){
+    clockBuffer[9] = 'P';
+  } else {
+    clockBuffer[9] = 'A';
+  }
+  clockBuffer[10] = 'M';
+  clockBuffer[11] = 0;
+
+  strncpy(messageBuffer, clockBuffer, MESSAGE_BUFFER_LEN);
+  writeMessageBuffer();
+}
+
+// Increment the clock 1 second
+void incrementClock() {
+  second++;
+  if(second > 60){
+    second = 0;
+    minute++;
+  }
+  if(minute > 60) {
+    minute = 0;
+    hour++;
+  }
+  if(hour >= 24){
+    hour = 0;
   }
 }
 
