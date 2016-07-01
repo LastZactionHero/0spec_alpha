@@ -126,7 +126,8 @@ void setup() {
   clearDisplay(WHITE);
   updateDisplay();
 
-  strncpy(messageBuffer, "Hello World!\nThis string goes on to take multiple lines.", MESSAGE_BUFFER_LEN);
+  //strncpy(messageBuffer, "Hello World!\nThis string demonstrates word wrapping.", MESSAGE_BUFFER_LEN);
+  strncpy(messageBuffer, "Hello World!\nabcdefghijklmnopqrstuvwxyz hello there again", MESSAGE_BUFFER_LEN);
   writeMessageBuffer();
 }
 
@@ -134,13 +135,15 @@ int gTextStartX = 0;
 int gTextStartY = 0;
 
 void writeMessageBuffer(){  
+  addLineBreaksToMessageBuffer();
+
   clearDisplay(WHITE);
   gTextStartX = 0;
   gTextStartY = 0;
 
   for(int i = 0; i < MESSAGE_BUFFER_LEN; i++){
     if(gTextStartX > (LCD_WIDTH - 8)){
-      gTextStartX = 0;
+      gTextStartX = 0;  
       gTextStartY += 8;
     }
 
@@ -157,6 +160,32 @@ void writeMessageBuffer(){
     updateDisplay();
   }
   updateDisplay();
+}
+
+void addLineBreaksToMessageBuffer() {
+  int msgX = 0;
+  int lastSpaceIdx = -1;
+  int lastSplitIdx = -1;
+  
+  for(int i = 0; i < strlen(messageBuffer); i++){
+    if(messageBuffer[i] == ' '){
+      lastSpaceIdx = i;
+      msgX += 6;
+    } else if(messageBuffer[i] == '\n'){
+      msgX = 0;
+      lastSpaceIdx = -1;
+    } else {
+      msgX += calcCharWidth(messageBuffer[i]) + 2;
+      if(msgX > (LCD_WIDTH - 8)){
+        if(lastSpaceIdx != -1 && lastSplitIdx != lastSpaceIdx){
+          messageBuffer[lastSpaceIdx] = '\n';
+          lastSplitIdx = lastSpaceIdx;
+          i = lastSpaceIdx + 1;
+          msgX = 0;          
+        }
+      }
+    }
+  }
 }
 
 int writeCharacter(char character){
