@@ -3,6 +3,7 @@
 /* PCD8544-specific defines: */
 #define LCD_COMMAND  0
 #define LCD_DATA     1
+#define LCD_CONTRAST 40 // good values between 40 and 60
 
 /* 84x48 LCD Defines: */
 #define LCD_WIDTH   84 // Note: x-coordinates go wide
@@ -114,14 +115,27 @@ const char font_z[] PROGMEM = "4-00f248f0";
 
 const char * const font_table[] PROGMEM = {font_exclaim, font_double_quote, font_pound, font_dollar, font_percent, font_amp, font_quote, font_lparen, font_rparen, font_star, font_plus, font_comma, font_dash, font_period, font_fwd_slash, font_0, font_1, font_2, font_3, font_4, font_5, font_6, font_7, font_8, font_9, font_colon, font_semicolon, font_lt, font_equal, font_gt, font_question, font_at, font_A, font_B, font_C, font_D, font_E, font_F, font_G, font_H, font_I, font_J, font_K, font_L, font_M, font_N, font_O, font_P, font_Q, font_R, font_S, font_T, font_U, font_V, font_W, font_X, font_Y, font_Z, font_lbracket, font_backslash, font_rbracket, font_caret, font_underscore, font_tilde, font_a, font_b, font_c, font_d, font_e, font_f, font_g, font_h, font_i, font_j, font_k, font_l, font_m, font_n, font_o, font_p, font_q, font_r, font_s, font_t, font_u, font_v, font_w, font_x, font_y, font_z};
 
-byte displayMap[LCD_WIDTH * LCD_HEIGHT / 8];
+// Font starts at ASCII 0x21 - exclaimation point. No valid characters before this.
+// Control characters like \n are handled explicitly.
+const char FONT_ARR_OFFSET = 0x21;
+
+// Message Buffer - Current message written to the screen
 const int MESSAGE_BUFFER_LEN = 96;
 char messageBuffer[MESSAGE_BUFFER_LEN];
+
+// Text Properties
+const int TEXT_LINE_HEIGHT = 8;
+const int TEXT_MAX_CHAR_WIDTH = 8;
+const int TEXT_SPACE_WIDTH = 6;
+const int TEXT_LETTER_SPACE_WIDTH = 2;
+
+// Display buffer
+byte displayMap[LCD_WIDTH * LCD_HEIGHT / 8];  
 
 void setup() {
   lcdBegin(); // This will setup our pins, and initialize the LCD
   updateDisplay(); // with displayMap untouched, SFE logo
-  setContrast(40); // Good values range from 40-60
+  setContrast(LCD_CONTRAST); // Good values range from 40-60
 
   clearDisplay(WHITE);
   updateDisplay();
@@ -130,57 +144,88 @@ void setup() {
   writeMessageBuffer();
 }
 
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
+}
+
 int gTextStartX = 0;
 int gTextStartY = 0;
 
+// Write the message buffer to the display
 void writeMessageBuffer(){  
-  addLineBreaksToMessageBuffer();
+  addLineBreaksToMessageBuffer(); // Preemptive word wrapping
 
   clearDisplay(WHITE);
-  gTextStartX = 0;
+
+  gTextStartX = 0; // character position marked with globals
   gTextStartY = 0;
 
+  // Loop over the message buffer
   for(int i = 0; i < MESSAGE_BUFFER_LEN; i++){
-    if(gTextStartX > (LCD_WIDTH - 8)){
+    // Wrap to the start of the line if we're over. Should only be encountered with very long words,
+    // since addLineBreaksToMessageBuffer() is wrapping when appropriate.
+    if(gTextStartX > (LCD_WIDTH - TEXT_MAX_CHAR_WIDTH)){
       gTextStartX = 0;  
-      gTextStartY += 8;
+      gTextStartY += TEXT_LINE_HEIGHT;
     }
 
-    if(messageBuffer[i] == 0){
+    if(messageBuffer[i] == 0){ 
+      // all done
       break;
+
     } else if(messageBuffer[i] == '\n') {
-      gTextStartY += 8;
+      // Move to start of the next line
+      gTextStartY += TEXT_LINE_HEIGHT;
       gTextStartX = 0;
     } else if(messageBuffer[i] == ' '){
-      gTextStartX += 6;
+      // Increment one space
+      gTextStartX += TEXT_SPACE_WIDTH;
     } else {
-      gTextStartX += writeCharacter(messageBuffer[i]) + 2;
+      // Write the character
+      // Increment the letter width + some spacing
+      gTextStartX += writeCharacter(messageBuffer[i]) + TEXT_LETTER_SPACE_WIDTH;
     }
   }
+
   updateDisplay();
 }
 
+// Perform word wrapping by adding line breaks to the message buffer
+// where possible.
 void addLineBreaksToMessageBuffer() {
-  int msgX = 0;
-  int lastSpaceIdx = -1;
-  int lastSplitIdx = -1;
+  int msgX = 0; // Current X position
+  int lastSpaceIdx = -1;  // Index of the last space
+  int lastSplitIdx = -1;  // Index of the last space we split into a new line
   
   for(int i = 0; i < strlen(messageBuffer); i++){
     if(messageBuffer[i] == ' '){
+      // Record the position of the last space. We might turn it into a newline later.
       lastSpaceIdx = i;
-      msgX += 6;
+      msgX += TEXT_SPACE_WIDTH; // Append space width
     } else if(messageBuffer[i] == '\n'){
+      // A newline sends the X position back to 0. Also indicate that there are no valid
+      // spaces to use (don't want to split on the previous line)
       msgX = 0;
       lastSpaceIdx = -1;
     } else {
-      msgX += calcCharWidth(messageBuffer[i]) + 2;
-      if(msgX > (LCD_WIDTH - 8)){
+      // Append character width
+      msgX += calcCharWidth(messageBuffer[i]) + TEXT_LETTER_SPACE_WIDTH;
+
+      // Are we're over the dislay width?
+      if(msgX > (LCD_WIDTH - TEXT_MAX_CHAR_WIDTH)){
+        // Is there a valid space to split on?
         if(lastSpaceIdx != -1 && lastSplitIdx != lastSpaceIdx){
+          // Yes there is- turn the last space into a newline, and start checking again from
+          // that position
           messageBuffer[lastSpaceIdx] = '\n';
           lastSplitIdx = lastSpaceIdx;
           i = lastSpaceIdx + 1;
           msgX = 0;          
         } else {
+          // No valid space- probably a really long word. 
+          // Nothing we can do, just wrap to the start.
           msgX = 0;
         }
       }
@@ -188,23 +233,33 @@ void addLineBreaksToMessageBuffer() {
   }
 }
 
+// Write a character the display buffer
+//
+// Globals:
+// gTextStartX: integer X position of character
+// gTextStartY: integer Y position of character
 int writeCharacter(char character){
   int charWidth = calcCharWidth(character);
-  bool charPixels[8 * 8];
-  int bitPosn = 0;
+  
+  bool charPixels[TEXT_MAX_CHAR_WIDTH * TEXT_LINE_HEIGHT];  // display buffer, maximum 8x8 size of character
+  int bitPosn = 0; // index into charPixels
 
+  // Get the display bytes from the font
   int fontIdx = charToFontIdx(character);
   char fontBuffer[16];
   strcpy_P(fontBuffer, (char*)pgm_read_word(&(font_table[fontIdx])));   
-   
+
+  // Loop over the font and map to the character display buffer
   for(int charIdx = 0; charIdx < strlen(fontBuffer); charIdx++){
-    char byteBuff[2];
+    char byteBuff[2]; // one byte at a time (e.g. 'FF')
 
     // Determine the width of the letter
-    if(charIdx >= 2){
-      byteBuff[charIdx % 2] = fontBuffer[charIdx];
-      if(charIdx % 2 == 1){
-        unsigned long hex = strtoul(byteBuff, NULL, 16);
+    if(charIdx >= 2){ // skip the first two characters - width and delimiter
+      byteBuff[charIdx % 2] = fontBuffer[charIdx]; // append to the byte buffer
+      
+      if(charIdx % 2 == 1){ // full buffer loaded, two characters (one byte)
+        unsigned long hex = strtoul(byteBuff, NULL, 16); // convert string buffer to a number
+        // identify active pixels in the byte
         for(int bit = 0; bit < 8; bit++){
           unsigned long mask = 1UL << (7 - bit);
           unsigned long result = mask & hex;
@@ -215,8 +270,9 @@ int writeCharacter(char character){
     }
   }
 
+  // Write the character buffer to the display buffer
   for(int x = 0; x < charWidth; x++){
-    for(int y = 0; y < 8; y++){
+    for(int y = 0; y < TEXT_LINE_HEIGHT; y++){
       if(charPixels[x + y * charWidth]){
         setPixel(x + gTextStartX, y + gTextStartY);  
       } else {
@@ -227,21 +283,21 @@ int writeCharacter(char character){
   return charWidth;
 }
 
+// Determine the font array index of a character
+//
+// returns array index
 int charToFontIdx(char character) {
-  return character - 0x21;
+  return character - FONT_ARR_OFFSET;
 }
 
+// Calcluate the width of a character
+//
+// returns width in pixels
 int calcCharWidth(char character) {
   int fontIdx = charToFontIdx(character);
   char w[1];
   strncpy_P(w, (char*)pgm_read_word(&(font_table[fontIdx])), 1);  
   return atoi(w);
-}
-
-
-void loop() {
-  // put your main code here, to run repeatedly:
-
 }
 
 // Helpful function to directly command the LCD to go to a
