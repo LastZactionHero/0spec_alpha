@@ -115,7 +115,7 @@ const char font_z[] PROGMEM = "4-00f248f0";
 const char * const font_table[] PROGMEM = {font_exclaim, font_double_quote, font_pound, font_dollar, font_percent, font_amp, font_quote, font_lparen, font_rparen, font_star, font_plus, font_comma, font_dash, font_period, font_fwd_slash, font_0, font_1, font_2, font_3, font_4, font_5, font_6, font_7, font_8, font_9, font_colon, font_semicolon, font_lt, font_equal, font_gt, font_question, font_at, font_A, font_B, font_C, font_D, font_E, font_F, font_G, font_H, font_I, font_J, font_K, font_L, font_M, font_N, font_O, font_P, font_Q, font_R, font_S, font_T, font_U, font_V, font_W, font_X, font_Y, font_Z, font_lbracket, font_backslash, font_rbracket, font_caret, font_underscore, font_tilde, font_a, font_b, font_c, font_d, font_e, font_f, font_g, font_h, font_i, font_j, font_k, font_l, font_m, font_n, font_o, font_p, font_q, font_r, font_s, font_t, font_u, font_v, font_w, font_x, font_y, font_z};
 
 byte displayMap[LCD_WIDTH * LCD_HEIGHT / 8];
-const int MESSAGE_BUFFER_LEN = 64;
+const int MESSAGE_BUFFER_LEN = 96;
 char messageBuffer[MESSAGE_BUFFER_LEN];
 
 void setup() {
@@ -126,8 +126,7 @@ void setup() {
   clearDisplay(WHITE);
   updateDisplay();
 
-  //strncpy(messageBuffer, "Hello World!\nThis string demonstrates word wrapping.", MESSAGE_BUFFER_LEN);
-  strncpy(messageBuffer, "Hello World!\nabcdefghijklmnopqrstuvwxyz hello there again", MESSAGE_BUFFER_LEN);
+  strncpy(messageBuffer, "Hello World!\nThis string demonstrates word wrapping.", MESSAGE_BUFFER_LEN);
   writeMessageBuffer();
 }
 
@@ -157,7 +156,6 @@ void writeMessageBuffer(){
     } else {
       gTextStartX += writeCharacter(messageBuffer[i]) + 2;
     }
-    updateDisplay();
   }
   updateDisplay();
 }
@@ -182,6 +180,8 @@ void addLineBreaksToMessageBuffer() {
           lastSplitIdx = lastSpaceIdx;
           i = lastSpaceIdx + 1;
           msgX = 0;          
+        } else {
+          msgX = 0;
         }
       }
     }
