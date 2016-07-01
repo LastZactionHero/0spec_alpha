@@ -86,7 +86,7 @@ const char font_rbracket[] PROGMEM = "1-02";
 const char font_caret[] PROGMEM = "1-02";
 const char font_underscore[] PROGMEM = "1-02";
 const char font_tilde[] PROGMEM = "1-02";
-const char font_a[] PROGMEM = "4-00797970";
+const char font_a[] PROGMEM = "4-00717970";
 const char font_b[] PROGMEM = "4-088e99e0";
 const char font_c[] PROGMEM = "4-00698960";
 const char font_d[] PROGMEM = "4-01179970";
@@ -133,6 +133,8 @@ const int TEXT_LETTER_SPACE_WIDTH = 2;
 byte displayMap[LCD_WIDTH * LCD_HEIGHT / 8];  
 
 void setup() {
+  Serial.begin(9600);
+
   lcdBegin(); // This will setup our pins, and initialize the LCD
   updateDisplay(); // with displayMap untouched, SFE logo
   setContrast(LCD_CONTRAST); // Good values range from 40-60
@@ -145,9 +147,20 @@ void setup() {
 }
 
 
-void loop() {
-  // put your main code here, to run repeatedly:
+int msgBufferIdx = 0;
 
+void loop() {  
+  if (Serial.available() > 0) {
+    char incomingChar = Serial.read();
+    if(incomingChar == '\n'){
+      msgBufferIdx = 0;
+      writeMessageBuffer();
+    } else if(msgBufferIdx < (MESSAGE_BUFFER_LEN + 1)) {
+      messageBuffer[msgBufferIdx] = incomingChar;
+      messageBuffer[msgBufferIdx + 1] = 0;
+      msgBufferIdx++;
+    }
+  }
 }
 
 int gTextStartX = 0;
