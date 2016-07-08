@@ -3,7 +3,7 @@
 /* PCD8544-specific defines: */
 #define LCD_COMMAND  0
 #define LCD_DATA     1
-#define LCD_CONTRAST 40 // good values between 40 and 60
+#define LCD_CONTRAST 50 // good values between 40 and 60
 
 /* 84x48 LCD Defines: */
 #define LCD_WIDTH   84 // Note: x-coordinates go wide
@@ -308,11 +308,11 @@ void writeClock() {
 // Increment the clock 1 second
 void incrementClock() {
   second++;
-  if(second > 60){
+  if(second >= 60){
     second = 0;
     minute++;
   }
-  if(minute > 60) {
+  if(minute >= 60) {
     minute = 0;
     hour++;
   }
